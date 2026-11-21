@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#F6EEDF">
+    <meta name="description" content="Recipes we love, passed around the table.">
+    <title>The Family Recipe Box</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js"></script>
+    <script defer src="config.js"></script>
+    <script defer src="db.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="header-inner">
+        <div class="brand">
+          <a class="brand-title" href="#/">The Family Recipe Box</a>
+          <p class="tagline">Recipes we love, passed around the table.</p>
+        </div>
+        <button class="button add-button" type="button" disabled title="Adding recipes will be available soon.">+ Add a recipe</button>
+      </div>
+    </header>
+
+    <main id="app" class="page-content" tabindex="-1">
+      <p class="status-message" role="status">Loading recipes…</p>
+    </main>
+  </body>
+</html>
