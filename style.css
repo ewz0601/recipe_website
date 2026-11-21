@@ -139,6 +139,22 @@ h3,
   opacity: 0.62;
 }
 
+.button-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #FFF8EC;
+}
+
+.button-primary:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: #FFF8EC;
+}
+
+.button-secondary {
+  background: var(--surface);
+}
+
 .page-content {
   padding-block: 32px 64px;
 }
@@ -344,6 +360,23 @@ h3,
   margin-bottom: 12px;
 }
 
+.detail-heading-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.detail-heading-top .detail-tags {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.edit-button {
+  flex: 0 0 auto;
+}
+
 .detail-title {
   margin-bottom: 8px;
   font-size: clamp(2rem, 8vw, 3.1rem);
@@ -466,6 +499,212 @@ h3,
   margin-top: 18px;
 }
 
+.editor-card {
+  max-width: 760px;
+  padding: clamp(20px, 5vw, 36px);
+  margin-inline: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.editor-title {
+  margin-bottom: 18px;
+  font-size: clamp(1.9rem, 6vw, 2.5rem);
+}
+
+.recipe-form {
+  display: grid;
+  gap: 16px;
+}
+
+.form-field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.form-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.form-input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+textarea.form-input {
+  min-height: 108px;
+  resize: vertical;
+}
+
+.form-input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+
+.form-details-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.tag-fieldset {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tag-fieldset legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.form-tag-group + .form-tag-group {
+  margin-top: 12px;
+}
+
+.form-tag-heading {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.form-tag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.form-tag-chip {
+  position: relative;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 6px 13px;
+  border: 1px solid var(--divider);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.form-tag-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.form-tag-chip:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #FFF8EC;
+}
+
+.form-tag-chip:has(input:focus-visible) {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.form-feedback {
+  padding: 10px 13px;
+  margin: 0 0 14px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+}
+
+.form-feedback[hidden] {
+  display: none;
+}
+
+.error-message {
+  border-color: #A8482B;
+  color: #7A311B;
+}
+
+.success-message {
+  border-color: #60734B;
+  color: #334625;
+}
+
+.honeypot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.password-dialog {
+  width: min(100% - 32px, 440px);
+  max-width: 440px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.password-dialog::backdrop {
+  background: rgb(36 25 17 / 55%);
+}
+
+.password-form {
+  display: grid;
+  gap: 10px;
+  padding: clamp(20px, 6vw, 30px);
+}
+
+.password-form h2 {
+  margin-bottom: 3px;
+  font-size: 1.6rem;
+  line-height: 1.25;
+}
+
+.password-error {
+  padding: 8px 10px;
+  margin: 0;
+  border-radius: 6px;
+  background: #F7E5D9;
+  color: #7A311B;
+}
+
+.password-error[hidden] {
+  display: none;
+}
+
+.password-form .form-actions {
+  margin-top: 8px;
+}
+
 @media (min-width: 680px) {
   .recipe-row {
     grid-template-columns: minmax(0, 1fr) minmax(150px, 210px);
@@ -500,6 +739,10 @@ h3,
 
   .detail-card {
     padding: 40px;
+  }
+
+  .form-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .detail-columns {

@@ -5,12 +5,24 @@ const TAG_GROUPS = [
   { name: "Diet", tags: ["healthy", "vegetarian", "vegan", "gluten-free", "quick"] },
 ];
 
+const PASSWORD_STORAGE_KEY = "familyRecipeBoxPassword";
 const app = document.querySelector("#app");
+const passwordDialog = document.querySelector("#password-dialog");
+const passwordForm = document.querySelector("#password-form");
+const passwordInput = document.querySelector("#family-password");
+const passwordError = document.querySelector("#password-error");
+const submitPasswordButton = document.querySelector("#submit-password");
+document.querySelector("#add-recipe").addEventListener("click", () => {
+  window.location.hash = "#/add";
+});
 const selectedTags = new Set();
 let searchText = "";
 let searchTimer;
 let requestId = 0;
+let routeVersion = 0;
 let browseView;
+let passwordPrompt;
+let flashMessage = "";
 
 function makeElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -46,6 +58,14 @@ function showStatus(message, options = {}) {
   }
 
   app.replaceChildren(status);
+}
+
+function takeFlash() {
+  if (!flashMessage) return null;
+  const notice = makeElement("p", "form-feedback success-message", flashMessage);
+  notice.setAttribute("role", "status");
+  flashMessage = "";
+  return notice;
 }
 
 function formatMeta(recipe) {
@@ -122,7 +142,11 @@ function createBrowseLayout() {
   const results = makeElement("div", "recipe-results");
   results.append(summary, list);
 
-  app.replaceChildren(controls, results);
+  const children = [];
+  const notice = takeFlash();
+  if (notice) children.push(notice);
+  children.push(controls, results);
+  app.replaceChildren(...children);
   browseView = { controls, summary, list };
   return browseView;
 }
@@ -272,10 +296,18 @@ function renderRecipeDetail(recipe) {
 
   const card = makeElement("article", "detail-card");
   const top = makeElement("header", "detail-heading");
+  const headingTop = makeElement("div", "detail-heading-top");
+  const editButton = makeElement("button", "button button-secondary edit-button", "Edit recipe");
+  editButton.type = "button";
+  editButton.addEventListener("click", () => {
+    window.location.hash = `#/recipe/${encodeURIComponent(recipe.id)}/edit`;
+  });
 
   if (recipe.tags && recipe.tags.length) {
-    appendTagPills(top, recipe.tags, "tag-list detail-tags");
+    appendTagPills(headingTop, recipe.tags, "tag-list detail-tags");
   }
+  headingTop.append(editButton);
+  top.append(headingTop);
   top.append(makeElement("h1", "detail-title", recipe.title || "Untitled recipe"));
 
   const meta = formatMeta(recipe);
@@ -286,6 +318,8 @@ function renderRecipeDetail(recipe) {
   if (recipe.updated_at && recipe.last_edited_by) {
     top.append(makeElement("p", "detail-updated", `Last edited by ${recipe.last_edited_by}`));
   }
+  const notice = takeFlash();
+  if (notice) top.append(notice);
   card.append(top);
 
   const divider = makeElement("hr", "detail-divider");
@@ -319,8 +353,418 @@ function renderRecipeDetail(recipe) {
   app.replaceChildren(back, card);
 }
 
+function completePasswordPrompt(password) {
+  if (!passwordPrompt) return;
+  const resolvePrompt = passwordPrompt.resolve;
+  passwordPrompt = null;
+  passwordForm.reset();
+  passwordError.textContent = "";
+  passwordError.hidden = true;
+  if (passwordDialog.open) passwordDialog.close();
+  resolvePrompt(password);
+}
+
+function promptForFamilyPassword() {
+  if (passwordPrompt) return passwordPrompt.promise;
+
+  passwordError.textContent = "";
+  passwordError.hidden = true;
+  passwordPrompt = {};
+  passwordPrompt.promise = new Promise((resolve) => {
+    passwordPrompt.resolve = resolve;
+  });
+  passwordDialog.showModal();
+  passwordInput.focus();
+  return passwordPrompt.promise;
+}
+
+passwordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!passwordForm.reportValidity()) return;
+
+  const password = passwordInput.value;
+  submitPasswordButton.disabled = true;
+  passwordError.textContent = "";
+  passwordError.hidden = true;
+
+  try {
+    const isValid = await window.recipeDb.checkPassword(password);
+    if (!isValid) {
+      passwordError.textContent = "That password didn't work.";
+      passwordError.hidden = false;
+      passwordInput.focus();
+      return;
+    }
+
+    try {
+      localStorage.setItem(PASSWORD_STORAGE_KEY, password);
+    } catch {
+      passwordError.textContent = "This browser cannot remember the password. Enable local storage and try again.";
+      passwordError.hidden = false;
+      passwordInput.focus();
+      return;
+    }
+    completePasswordPrompt(password);
+  } catch (error) {
+    console.error("Could not check the family password.", error?.code || "unknown");
+    passwordError.textContent = "Could not check the password. Please try again.";
+    passwordError.hidden = false;
+    passwordInput.focus();
+  } finally {
+    submitPasswordButton.disabled = false;
+  }
+});
+
+document.querySelector("#cancel-password").addEventListener("click", () => {
+  completePasswordPrompt(null);
+});
+
+passwordDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  completePasswordPrompt(null);
+});
+
+async function getOrPromptForPassword() {
+  let storedPassword;
+  try {
+    storedPassword = localStorage.getItem(PASSWORD_STORAGE_KEY);
+  } catch {
+    showStatus("This browser cannot store the family password. Enable local storage and try again.", {
+      error: true,
+    });
+    return null;
+  }
+  return storedPassword || promptForFamilyPassword();
+}
+
+function addFormField(form, labelText, name, options = {}) {
+  const wrapper = makeElement("div", `form-field${options.wide ? " form-field-wide" : ""}`);
+  const id = `recipe-${name}`;
+  const label = makeElement("label", "form-label", labelText);
+  label.htmlFor = id;
+  wrapper.append(label);
+
+  const field = makeElement(options.multiline ? "textarea" : "input", "form-input");
+  field.id = id;
+  field.name = name;
+  field.required = Boolean(options.required);
+  if (options.multiline) {
+    field.rows = options.rows || 4;
+  } else {
+    field.type = options.type || "text";
+  }
+  if (options.maxLength) field.maxLength = options.maxLength;
+  if (options.placeholder) field.placeholder = options.placeholder;
+  if (options.value) field.value = options.value;
+  wrapper.append(field);
+  form.append(wrapper);
+  return field;
+}
+
+function addRecipeTagFields(form, recipeTags = []) {
+  const fieldset = makeElement("fieldset", "form-field form-field-wide tag-fieldset");
+  const legend = makeElement("legend", "form-label", "Tags");
+
+  for (const group of TAG_GROUPS) {
+    const section = makeElement("div", "form-tag-group");
+    section.append(makeElement("p", "form-tag-heading", group.name));
+    const options = makeElement("div", "form-tag-options");
+    for (const tag of group.tags) {
+      const wrapper = makeElement("label", "form-tag-chip");
+      const input = makeElement("input");
+      input.type = "checkbox";
+      input.name = "tags";
+      input.value = tag;
+      input.checked = recipeTags.includes(tag);
+      const text = makeElement("span", "", humanizeTag(tag));
+      wrapper.append(input, text);
+      options.append(wrapper);
+    }
+    section.append(options);
+    fieldset.append(section);
+  }
+
+  fieldset.prepend(legend);
+  form.append(fieldset);
+}
+
+function showFormFeedback(element, message, isError = true) {
+  element.textContent = message;
+  element.classList.toggle("success-message", !isError);
+  element.classList.toggle("error-message", isError);
+  element.hidden = !message;
+  element.setAttribute("role", isError ? "alert" : "status");
+}
+
+function isInvalidPasswordError(error) {
+  return (
+    error?.code === "28000" ||
+    String(error?.message || "").toLowerCase().includes("invalid password")
+  );
+}
+
+async function writeWithPassword(write, feedback) {
+  const password = await getOrPromptForPassword();
+  if (!password) return false;
+
+  try {
+    await write(password);
+    return true;
+  } catch (error) {
+    if (!isInvalidPasswordError(error)) {
+      console.error("Could not save the recipe.", error?.code || "unknown");
+      showFormFeedback(feedback, "Could not save your recipe. Please try again.");
+      return false;
+    }
+  }
+
+  try {
+    localStorage.removeItem(PASSWORD_STORAGE_KEY);
+  } catch {
+    showFormFeedback(feedback, "This browser could not clear the saved password. Please check its storage settings.");
+    return false;
+  }
+
+  const renewedPassword = await promptForFamilyPassword();
+  if (!renewedPassword) return false;
+
+  try {
+    await write(renewedPassword);
+    return true;
+  } catch (error) {
+    if (isInvalidPasswordError(error)) {
+      try {
+        localStorage.removeItem(PASSWORD_STORAGE_KEY);
+      } catch {
+        showFormFeedback(feedback, "This browser could not clear the saved password. Please check its storage settings.");
+        return false;
+      }
+      showFormFeedback(feedback, "The password was rejected. Please try again.");
+      return false;
+    }
+    console.error("Could not save the recipe.", error?.code || "unknown");
+    showFormFeedback(feedback, "Could not save your recipe. Please try again.");
+    return false;
+  }
+}
+
+function renderRecipeForm(mode, recipe = null) {
+  const editing = mode === "edit";
+  const back = makeElement("a", "detail-back", editing ? "← Back to recipe" : "← All recipes");
+  back.href = editing ? `#/recipe/${encodeURIComponent(recipe.id)}` : "#/";
+
+  const card = makeElement("section", "editor-card");
+  card.append(makeElement("h1", "editor-title", editing ? "Edit recipe" : "Add a recipe"));
+  const feedback = makeElement("p", "form-feedback");
+  feedback.hidden = true;
+  feedback.setAttribute("role", "alert");
+
+  const form = makeElement("form", "recipe-form");
+  addFormField(form, "Recipe title", "title", {
+    maxLength: 120,
+    required: true,
+    value: recipe?.title || "",
+  });
+  addFormField(form, "Your name", "name", {
+    maxLength: 60,
+    required: true,
+    value: editing ? recipe?.last_edited_by || "" : recipe?.submitted_by || "",
+  });
+  addFormField(form, "Short description", "description", {
+    maxLength: 300,
+    multiline: true,
+    rows: 2,
+    value: recipe?.description || "",
+  });
+  addFormField(form, "Ingredients (one per line)", "ingredients", {
+    maxLength: 4000,
+    multiline: true,
+    required: true,
+    value: recipe?.ingredients || "",
+  });
+  addFormField(form, "Instructions (one step per line)", "instructions", {
+    maxLength: 8000,
+    multiline: true,
+    required: true,
+    value: recipe?.instructions || "",
+  });
+  addFormField(form, "Family notes (optional)", "notes", {
+    maxLength: 1000,
+    multiline: true,
+    rows: 3,
+    value: recipe?.notes || "",
+  });
+
+  const details = makeElement("div", "form-details-grid");
+  addFormField(details, "Prep time", "prep_time", {
+    maxLength: 40,
+    value: recipe?.prep_time || "",
+    placeholder: "e.g. 1 hr 15 min",
+  });
+  addFormField(details, "Servings", "servings", {
+    maxLength: 40,
+    value: recipe?.servings || "",
+    placeholder: "e.g. 8",
+  });
+  form.append(details);
+  addFormField(form, "Source URL (optional)", "source_url", {
+    maxLength: 500,
+    type: "url",
+    value: recipe?.source_url || "",
+    placeholder: "https://",
+  });
+  addRecipeTagFields(form, recipe?.tags || []);
+
+  const honeypot = makeElement("input", "honeypot");
+  honeypot.type = "text";
+  honeypot.name = "website";
+  honeypot.autocomplete = "off";
+  honeypot.tabIndex = -1;
+  honeypot.setAttribute("aria-hidden", "true");
+  form.append(honeypot);
+
+  const actions = makeElement("div", "form-actions");
+  const cancel = makeElement("a", "button button-secondary", "Cancel");
+  cancel.href = back.href;
+  const submit = makeElement("button", "button button-primary", editing ? "Save changes" : "Add recipe");
+  submit.type = "submit";
+  actions.append(cancel, submit);
+  form.append(actions);
+
+  card.append(feedback, form);
+  app.replaceChildren(back, card);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (honeypot.value.trim()) {
+      window.location.hash = editing ? back.href : "#/";
+      return;
+    }
+
+    const values = new FormData(form);
+    for (const [name, label] of [
+      ["title", "Recipe title"],
+      ["name", "Your name"],
+      ["ingredients", "Ingredients"],
+      ["instructions", "Instructions"],
+    ]) {
+      if (String(values.get(name) || "").trim()) continue;
+      showFormFeedback(feedback, `${label} cannot be blank.`);
+      form.elements.namedItem(name).focus();
+      return;
+    }
+
+    const sourceUrl = String(values.get("source_url") || "").trim();
+    if (sourceUrl) {
+      try {
+        const url = new URL(sourceUrl);
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          throw new Error("Unsupported protocol");
+        }
+      } catch {
+        showFormFeedback(feedback, "Enter a valid source URL starting with http:// or https://.");
+        return;
+      }
+    }
+
+    const optionalValue = (name) => String(values.get(name) || "").trim() || null;
+    const recipeData = {
+      title: String(values.get("title")).trim(),
+      description: optionalValue("description"),
+      ingredients: String(values.get("ingredients")).trim(),
+      instructions: String(values.get("instructions")).trim(),
+      notes: optionalValue("notes"),
+      tags: values.getAll("tags").map(String),
+      prep_time: optionalValue("prep_time"),
+      servings: optionalValue("servings"),
+      source_url: sourceUrl || null,
+    };
+
+    submit.disabled = true;
+    showFormFeedback(feedback, "", false);
+    const succeeded = await writeWithPassword(
+      (password) =>
+        editing
+          ? window.recipeDb.update(password, recipe.id, {
+              ...recipeData,
+              edited_by: String(values.get("name")).trim(),
+            })
+          : window.recipeDb.add(password, {
+              ...recipeData,
+              submitted_by: String(values.get("name")).trim(),
+            }),
+      feedback
+    );
+    submit.disabled = false;
+    if (!succeeded) return;
+
+    flashMessage = editing ? "Recipe updated." : "Recipe added.";
+    window.location.hash = editing ? `#/recipe/${encodeURIComponent(recipe.id)}` : "#/";
+  });
+}
+
+async function loadRecipeForm(mode, id, version) {
+  const password = await getOrPromptForPassword();
+  if (version !== routeVersion) return;
+  if (!password) {
+    window.location.hash = "#/";
+    return;
+  }
+
+  if (mode === "add") {
+    renderRecipeForm("add");
+    return;
+  }
+
+  showStatus("Loading recipe…");
+  try {
+    const recipe = await window.recipeDb.get(id);
+    if (version !== routeVersion) return;
+    if (!recipe) {
+      showRecipeNotFound();
+      return;
+    }
+    renderRecipeForm("edit", recipe);
+  } catch (error) {
+    if (version !== routeVersion) return;
+    console.error("Could not load recipe for editing.", error?.code || "unknown");
+    showStatus("Could not load this recipe. Please try again.", {
+      error: true,
+      retry: () => loadRecipeForm(mode, id, version),
+    });
+  }
+}
+
 function route() {
   clearTimeout(searchTimer);
+  const version = ++routeVersion;
+  ++requestId;
+  const hash = window.location.hash;
+
+  if (hash === "#/add") {
+    loadRecipeForm("add", null, version);
+    return;
+  }
+
+  const editMatch = hash.match(/^#\/recipe\/([^/]+)\/edit\/?$/);
+  if (editMatch) {
+    let id;
+    try {
+      id = decodeURIComponent(editMatch[1]);
+    } catch {
+      showRecipeNotFound();
+      return;
+    }
+    if (!/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(id)) {
+      showRecipeNotFound();
+      return;
+    }
+    loadRecipeForm("edit", id, version);
+    return;
+  }
+
+  if (passwordPrompt) completePasswordPrompt(null);
   const match = window.location.hash.match(/^#\/recipe\/([^/]+)\/?$/);
   if (!match) {
     loadRecipes();

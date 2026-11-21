@@ -22,12 +22,25 @@
           <a class="brand-title" href="#/">The Family Recipe Box</a>
           <p class="tagline">Recipes we love, passed around the table.</p>
         </div>
-        <button class="button add-button" type="button" disabled title="Adding recipes will be available soon.">+ Add a recipe</button>
+        <button class="button add-button" id="add-recipe" type="button">+ Add a recipe</button>
       </div>
     </header>
 
     <main id="app" class="page-content" tabindex="-1">
       <p class="status-message" role="status">Loading recipes…</p>
     </main>
+
+    <dialog class="password-dialog" id="password-dialog" aria-labelledby="password-title">
+      <form class="password-form" id="password-form">
+        <h2 id="password-title">Enter the family password</h2>
+        <p class="password-error" id="password-error" role="alert" hidden></p>
+        <label class="form-label" for="family-password">Family password</label>
+        <input class="form-input" id="family-password" name="password" type="password" autocomplete="current-password" required>
+        <div class="form-actions">
+          <button class="button button-secondary" id="cancel-password" type="button">Cancel</button>
+          <button class="button button-primary" id="submit-password" type="submit">Continue</button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>
