@@ -11,6 +11,11 @@
   --tag-ink: #5A3F2B;
   --notes: #FFF6E3;
   --divider: #B9A07C;
+  --button-text: #FFF8EC;
+  --error-background: #F7E5D9;
+  --success-border: #60734B;
+  --success-text: #334625;
+  --backdrop: rgb(36 25 17 / 55%);
 }
 
 * {
@@ -131,7 +136,7 @@ h3,
 .button:hover:not(:disabled) {
   border-color: var(--accent-hover);
   background: var(--accent-hover);
-  color: #FFF8EC;
+  color: var(--button-text);
 }
 
 .button:disabled {
@@ -142,13 +147,13 @@ h3,
 .button-primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #FFF8EC;
+  color: var(--button-text);
 }
 
 .button-primary:hover:not(:disabled) {
   border-color: var(--accent-hover);
   background: var(--accent-hover);
-  color: #FFF8EC;
+  color: var(--button-text);
 }
 
 .button-secondary {
@@ -228,7 +233,7 @@ h3,
 .chip[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent);
-  color: #FFF8EC;
+  color: var(--button-text);
 }
 
 .filter-actions {
@@ -615,7 +620,7 @@ textarea.form-input {
 .form-tag-chip:has(input:checked) {
   border-color: var(--accent);
   background: var(--accent);
-  color: #FFF8EC;
+  color: var(--button-text);
 }
 
 .form-tag-chip:has(input:focus-visible) {
@@ -643,13 +648,13 @@ textarea.form-input {
 }
 
 .error-message {
-  border-color: #A8482B;
-  color: #7A311B;
+  border-color: var(--accent);
+  color: var(--accent-hover);
 }
 
 .success-message {
-  border-color: #60734B;
-  color: #334625;
+  border-color: var(--success-border);
+  color: var(--success-text);
 }
 
 .honeypot {
@@ -674,7 +679,7 @@ textarea.form-input {
 }
 
 .password-dialog::backdrop {
-  background: rgb(36 25 17 / 55%);
+  background: var(--backdrop);
 }
 
 .password-form {
@@ -693,8 +698,8 @@ textarea.form-input {
   padding: 8px 10px;
   margin: 0;
   border-radius: 6px;
-  background: #F7E5D9;
-  color: #7A311B;
+  background: var(--error-background);
+  color: var(--accent-hover);
 }
 
 .password-error[hidden] {

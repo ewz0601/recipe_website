@@ -1,0 +1,51 @@
+# The Family Recipe Box
+
+A simple, public recipe index for the family. Anyone can browse and search recipes. Adding or editing asks for the shared family password; the site has no individual accounts and does not delete recipes.
+
+## How it works
+
+The site is plain HTML, CSS, and JavaScript. `index.html` loads the Supabase JavaScript client from a pinned CDN version, and `config.js` contains the project's URL and public browser key. The public key can read recipes. Adding and editing go through database functions that check the shared password; the password is saved in this browser after it is checked so it is only requested once per device.
+
+The Supabase project and database are already configured. `supabase/schema.sql` is kept as a reference and does not need to be run again.
+
+## Run locally
+
+From the project folder, start a simple static server:
+
+```sh
+python3 -m http.server 8000
+```
+
+Then open <http://localhost:8000> in a browser. Stop the server with Ctrl+C.
+
+## Publish with GitHub Pages
+
+1. Push the site files to the repository's `main` branch.
+2. In GitHub, open **Settings → Pages**.
+3. Under **Build and deployment**, choose **Deploy from a branch**.
+4. Choose the `main` branch and the `/(root)` folder, then save.
+5. After GitHub finishes publishing, use the Pages URL shown in Settings.
+
+## Keep Supabase awake
+
+The scheduled workflow in `.github/workflows/keepalive.yml` makes a small read-only request to the recipes API every three days. It can also be started manually from the repository's **Actions** tab.
+
+Add these repository secrets in **Settings → Secrets and variables → Actions → New repository secret**:
+
+- `SUPABASE_URL`: the project URL from `config.js`
+- `SUPABASE_ANON_KEY`: the public key from `config.js`
+
+GitHub may disable scheduled workflows in repositories without activity for 60 days. If that happens, open the workflow in **Actions** and re-enable it.
+
+## Family password and backups
+
+An administrator can change the shared password in the Supabase SQL Editor by updating the stored hash. Replace the placeholder with a new, long family passphrase before running this statement:
+
+```sql
+update public.family_settings
+set password_hash = extensions.crypt('NEW-LONG-FAMILY-PASSPHRASE', extensions.gen_salt('bf'));
+```
+
+After a password change, each browser will ask for the new password the next time someone adds or edits a recipe. The website has no password reset feature.
+
+Export the `recipes` table to CSV from the Supabase Table Editor now and then as a backup. The website does not delete recipes; if one must be removed, an administrator can delete its row from the Table Editor.
