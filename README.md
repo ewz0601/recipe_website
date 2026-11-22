@@ -2,9 +2,20 @@
 
 A simple, public recipe index for the family. Anyone can browse and search recipes. Adding or editing asks for the shared family password; the site has no individual accounts and does not delete recipes.
 
+Families can also keep a private-to-the-family list of favorite recipes on this device. A family is chosen once and remembered in localStorage. The family names and favorites are stored in Supabase and are shared across devices after the same family is picked.
+
 ## How it works
 
 The site is plain HTML, CSS, and JavaScript. `index.html` loads the Supabase JavaScript client from a pinned CDN version, and `config.js` contains the project's URL and public browser key. The public key can read recipes. Adding and editing go through database functions that check the shared password; the password is saved in this browser after it is checked so it is only requested once per device.
+
+On first visit, the family picker asks which family is using the device. Its names come from the `families` table. Favorites are stored in the `favorites` table and can be added or removed without the recipe-editing password. Use the menu to switch families or open all extended family recipes.
+
+The `anon` database role needs table privileges in addition to the RLS policies. If the site reports a family-table permission error, run these statements in the Supabase SQL Editor (they grant table access but do not bypass RLS):
+
+```sql
+grant select on public.families to anon;
+grant select, insert, delete on public.favorites to anon;
+```
 
 The Supabase project and database are already configured. `supabase/schema.sql` is kept as a reference and does not need to be run again.
 

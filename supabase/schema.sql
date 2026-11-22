@@ -19,6 +19,21 @@ create table public.recipes (
 
 create index recipes_tags_idx on public.recipes using gin (tags);
 
+create table public.families (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique check (char_length(name) between 1 and 120)
+);
+
+create table public.favorites (
+  family_id uuid not null references public.families(id) on delete cascade,
+  recipe_id uuid not null references public.recipes(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (family_id, recipe_id)
+);
+
+create index favorites_family_idx on public.favorites (family_id);
+create index favorites_recipe_idx on public.favorites (recipe_id);
+
 -- Holds the hashed family password. RLS is on with NO policies, so the public key cannot read it.
 create table public.family_settings (
   id int primary key default 1 check (id = 1),
@@ -27,12 +42,28 @@ create table public.family_settings (
 
 alter table public.recipes enable row level security;
 alter table public.family_settings enable row level security;
+alter table public.families enable row level security;
+alter table public.favorites enable row level security;
 
 -- The public key can only read recipes. No direct insert, update or delete.
 create policy "anyone can read" on public.recipes for select to anon using (true);
 revoke all on public.recipes from anon;
 grant select on public.recipes to anon;
 revoke all on public.family_settings from anon;
+
+create policy "anyone can read families" on public.families
+  for select to anon using (true);
+create policy "anyone can read favorites" on public.favorites
+  for select to anon using (true);
+create policy "anyone can add favorites" on public.favorites
+  for insert to anon with check (true);
+create policy "anyone can remove favorites" on public.favorites
+  for delete to anon using (true);
+
+revoke all on public.families from anon;
+grant select on public.families to anon;
+revoke all on public.favorites from anon;
+grant select, insert, delete on public.favorites to anon;
 
 -- Returns true if the password is correct (used for the one-time unlock prompt).
 create or replace function public.check_family_password(p_password text)

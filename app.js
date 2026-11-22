@@ -6,6 +6,7 @@ const TAG_GROUPS = [
 ];
 
 const PASSWORD_STORAGE_KEY = "familyRecipeBoxPassword";
+const FAMILY_STORAGE_KEY = "familyRecipeBoxFamily";
 const app = document.querySelector("#app");
 const passwordDialog = document.querySelector("#password-dialog");
 const passwordForm = document.querySelector("#password-form");
@@ -23,6 +24,27 @@ let routeVersion = 0;
 let browseView;
 let passwordPrompt;
 let flashMessage = "";
+let families = [];
+let currentFamily = null;
+let favoriteIds = new Set();
+let familyStatePromise = null;
+let browseMode = "home";
+
+const familyMenuButton = document.querySelector("#family-menu-button");
+const familyMenu = document.querySelector("#family-menu");
+
+familyMenuButton.addEventListener("click", () => {
+  const opening = familyMenu.hidden;
+  familyMenu.hidden = !opening;
+  familyMenuButton.setAttribute("aria-expanded", String(opening));
+});
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".menu-wrap")) {
+    familyMenu.hidden = true;
+    familyMenuButton.setAttribute("aria-expanded", "false");
+  }
+});
 
 function makeElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -60,6 +82,13 @@ function showStatus(message, options = {}) {
   app.replaceChildren(status);
 }
 
+function familyLoadErrorMessage(error) {
+  if (error?.code === "42501") {
+    return "Supabase is missing permission to read family data. In the Supabase SQL Editor, run the family-table GRANT statements documented in the README.";
+  }
+  return "Could not load your family. Please try again.";
+}
+
 function takeFlash() {
   if (!flashMessage) return null;
   const notice = makeElement("p", "form-feedback success-message", flashMessage);
@@ -76,8 +105,130 @@ function formatMeta(recipe) {
   return details.join(" · ");
 }
 
-function createBrowseLayout() {
+function getStoredFamilyId() {
+  try {
+    return localStorage.getItem(FAMILY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredFamily() {
+  try {
+    localStorage.removeItem(FAMILY_STORAGE_KEY);
+  } catch {
+    // The picker can still work for this page even if storage is unavailable.
+  }
+  currentFamily = null;
+  favoriteIds = new Set();
+  updateMenu();
+}
+
+function updateMenu() {
+  familyMenu.replaceChildren();
+  if (!currentFamily) {
+    familyMenu.hidden = true;
+    familyMenuButton.hidden = true;
+    return;
+  }
+
+  familyMenuButton.hidden = false;
+  const home = makeElement("a", "", `${currentFamily.name}'s Recipes`);
+  home.href = "#/";
+  familyMenu.append(home);
+
+  const all = makeElement("a", "", "View all extended family recipes");
+  all.href = "#/all";
+  familyMenu.append(all);
+
+  const switchFamily = makeElement("button", "", "Switch family");
+  switchFamily.type = "button";
+  switchFamily.addEventListener("click", () => {
+    clearStoredFamily();
+    familyMenu.hidden = true;
+    familyMenuButton.setAttribute("aria-expanded", "false");
+    window.location.hash = "#/family";
+  });
+  familyMenu.append(switchFamily);
+}
+
+async function ensureFamilyState(force = false) {
+  if (!force && familyStatePromise) return familyStatePromise;
+
+  familyStatePromise = (async () => {
+    families = await window.recipeDb.listFamilies();
+    const storedId = getStoredFamilyId();
+    currentFamily =
+      families.find((family) => String(family.id) === storedId) || null;
+
+    if (currentFamily) {
+      const ids = await window.recipeDb.getFavoriteRecipeIds(currentFamily.id);
+      favoriteIds = new Set(ids);
+    } else {
+      favoriteIds = new Set();
+    }
+    updateMenu();
+  })();
+
+  try {
+    await familyStatePromise;
+  } catch (error) {
+    familyStatePromise = null;
+    throw error;
+  }
+  return familyStatePromise;
+}
+
+function renderFamilyPicker() {
+  const picker = makeElement("section", "family-picker");
+  picker.append(makeElement("h1", "", "Which family are you?"));
+
+  const list = makeElement("div", "family-picker-list");
+  for (const family of families) {
+    const button = makeElement("button", "button button-primary family-picker-button", family.name);
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        localStorage.setItem(FAMILY_STORAGE_KEY, family.id);
+      } catch {
+        showStatus("This browser cannot remember your family. Enable local storage and try again.", {
+          error: true,
+        });
+        button.disabled = false;
+        return;
+      }
+      familyStatePromise = null;
+      try {
+        await ensureFamilyState(true);
+        window.location.hash = "#/";
+      } catch (error) {
+        console.error("Could not load saved recipes:", error);
+        showStatus("Could not open the family page. Please try again.", {
+          error: true,
+          retry: renderFamilyPicker,
+        });
+      }
+    });
+    list.append(button);
+  }
+  picker.append(list);
+
+  if (families.length === 0) {
+    picker.append(makeElement("p", "empty-message", "No families are available yet."));
+  }
+  app.replaceChildren(picker);
+}
+
+function createBrowseLayout(titleText) {
   const controls = makeElement("section", "browse-controls");
+  const heading = makeElement("h1", "browse-title", titleText);
+  if (browseMode === "all") {
+    const back = makeElement("a", "detail-back", "← Your family’s recipes");
+    back.href = "#/";
+    controls.append(back);
+  }
+  controls.append(heading);
 
   const searchLabel = makeElement("label", "search-label", "Search recipes");
   searchLabel.htmlFor = "recipe-search";
@@ -151,7 +302,96 @@ function createBrowseLayout() {
   return browseView;
 }
 
-function appendRecipeRow(list, recipe) {
+function favoriteLabel(recipeId) {
+  const saved = favoriteIds.has(recipeId);
+  return saved
+    ? `Remove from ${currentFamily.name}'s recipes`
+    : `Add to ${currentFamily.name}'s recipes`;
+}
+
+async function toggleFavorite(button, recipeId, errorMessage = null) {
+  if (!currentFamily) return;
+  const wasSaved = favoriteIds.has(recipeId);
+  button.disabled = true;
+  if (errorMessage) errorMessage.textContent = "";
+
+  if (wasSaved) {
+    favoriteIds.delete(recipeId);
+  } else {
+    favoriteIds.add(recipeId);
+  }
+  updateFavoriteButton(button, recipeId);
+
+  try {
+    if (wasSaved) {
+      await window.recipeDb.removeFavorite(currentFamily.id, recipeId);
+    } else {
+      await window.recipeDb.addFavorite(currentFamily.id, recipeId);
+    }
+  } catch (error) {
+    if (wasSaved) {
+      favoriteIds.add(recipeId);
+    } else {
+      favoriteIds.delete(recipeId);
+    }
+    updateFavoriteButton(button, recipeId);
+    if (errorMessage) {
+      errorMessage.textContent = "Could not update this recipe. Please try again.";
+    }
+    console.error("Could not update favorite:", error);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function updateFavoriteButton(button, recipeId) {
+  const saved = favoriteIds.has(recipeId);
+  button.classList.toggle("is-saved", saved);
+  button.textContent = saved ? "✓" : "+";
+  button.setAttribute("aria-label", favoriteLabel(recipeId));
+  button.setAttribute("aria-pressed", String(saved));
+  button.title = saved ? "Remove from our recipes" : "Add to our recipes";
+}
+
+function appendFavoriteControl(parent, recipeId) {
+  const button = makeElement("button", "favorite-toggle");
+  button.type = "button";
+  updateFavoriteButton(button, recipeId);
+  const errorMessage = makeElement("p", "favorite-error");
+  errorMessage.setAttribute("role", "alert");
+  button.addEventListener("click", () => toggleFavorite(button, recipeId, errorMessage));
+  parent.append(button);
+  parent.append(errorMessage);
+}
+
+function appendDetailFavorite(parent, recipeId) {
+  const wrapper = makeElement("div", "favorite-detail");
+  const button = makeElement("button", "favorite-toggle-detail");
+  button.type = "button";
+  const icon = makeElement("span", "favorite-toggle");
+  updateFavoriteButton(icon, recipeId);
+  const label = makeElement("span", "", "");
+  const updateLabel = () => {
+    label.textContent = favoriteIds.has(recipeId)
+      ? "Remove from our recipes"
+      : "Add to our recipes";
+  };
+  updateLabel();
+
+  button.append(icon, label);
+  const errorMessage = makeElement("p", "favorite-error");
+  errorMessage.setAttribute("role", "alert");
+  button.addEventListener("click", async () => {
+    await toggleFavorite(icon, recipeId, errorMessage);
+    updateLabel();
+  });
+
+  wrapper.append(button, errorMessage);
+  parent.append(wrapper);
+  return wrapper;
+}
+
+function appendRecipeRow(list, recipe, showFavorite = false) {
   const row = makeElement("article", "recipe-row");
   const details = makeElement("div", "recipe-row-main");
   const title = makeElement("a", "recipe-title", recipe.title || "Untitled recipe");
@@ -172,6 +412,9 @@ function appendRecipeRow(list, recipe) {
   if (recipe.submitted_by) {
     meta.append(makeElement("p", "", `Shared by ${recipe.submitted_by}`));
   }
+  if (showFavorite) {
+    appendFavoriteControl(meta, recipe.id);
+  }
 
   row.append(details, meta);
   list.append(row);
@@ -179,10 +422,18 @@ function appendRecipeRow(list, recipe) {
 
 async function loadRecipes() {
   const currentRequest = ++requestId;
+  const titleText = browseMode === "all"
+    ? "All Extended Family Recipes"
+    : `${currentFamily?.name || "Family"}'s Recipes`;
   const view =
     browseView && browseView.controls.isConnected
       ? browseView
-      : createBrowseLayout();
+      : createBrowseLayout(titleText);
+  if (!view.controls.querySelector(".browse-title")) {
+    view.controls.prepend(makeElement("h1", "browse-title", titleText));
+  } else {
+    view.controls.querySelector(".browse-title").textContent = titleText;
+  }
   const { summary, list } = view;
   for (const chip of view.controls.querySelectorAll(".chip")) {
     const tag = chip.dataset.tag;
@@ -192,21 +443,33 @@ async function loadRecipes() {
   list.replaceChildren();
 
   try {
-    const recipes = await window.recipeDb.list({
+    let recipes = await window.recipeDb.list({
       search: searchText,
       tags: [...selectedTags],
     });
     if (currentRequest !== requestId) return;
+    if (browseMode === "home") {
+      recipes = recipes.filter((recipe) => favoriteIds.has(recipe.id));
+    }
 
     const count = recipes.length;
     summary.textContent = `Showing ${count} ${count === 1 ? "recipe" : "recipes"}`;
     if (count === 0) {
-      list.append(makeElement("p", "empty-message", "No recipes match those filters"));
+      if (browseMode === "home" && !searchText && selectedTags.size === 0) {
+        const empty = makeElement("div", "empty-message");
+        empty.append(makeElement("p", "", "No saved recipes yet. Pick a few favorites from the family collection."));
+        const allLink = makeElement("a", "button button-primary", "View all recipes");
+        allLink.href = "#/all";
+        empty.append(allLink);
+        list.append(empty);
+      } else {
+        list.append(makeElement("p", "empty-message", "No recipes match those filters"));
+      }
       return;
     }
 
     for (const recipe of recipes) {
-      appendRecipeRow(list, recipe);
+      appendRecipeRow(list, recipe, browseMode === "all");
     }
   } catch (error) {
     if (currentRequest !== requestId) return;
@@ -291,8 +554,8 @@ function showRecipeNotFound() {
 }
 
 function renderRecipeDetail(recipe) {
-  const back = makeElement("a", "detail-back", "← All recipes");
-  back.href = "#/";
+  const back = makeElement("a", "detail-back", "← All Extended Family Recipes");
+  back.href = "#/all";
 
   const card = makeElement("article", "detail-card");
   const top = makeElement("header", "detail-heading");
@@ -307,6 +570,7 @@ function renderRecipeDetail(recipe) {
     appendTagPills(headingTop, recipe.tags, "tag-list detail-tags");
   }
   headingTop.append(editButton);
+  appendDetailFavorite(top, recipe.id);
   top.append(headingTop);
   top.append(makeElement("h1", "detail-title", recipe.title || "Untitled recipe"));
 
@@ -736,11 +1000,45 @@ async function loadRecipeForm(mode, id, version) {
   }
 }
 
-function route() {
+async function route() {
   clearTimeout(searchTimer);
   const version = ++routeVersion;
   ++requestId;
+  browseView = null;
   const hash = window.location.hash;
+
+  if (hash === "#/family") {
+    try {
+      await ensureFamilyState(true);
+      if (version !== routeVersion) return;
+      renderFamilyPicker();
+    } catch (error) {
+      console.error("Could not load families:", error);
+      showStatus("Could not load families. Please try again.", {
+        error: true,
+        retry: route,
+      });
+    }
+    return;
+  }
+
+  try {
+    await ensureFamilyState();
+  } catch (error) {
+    if (version !== routeVersion) return;
+    console.error("Could not load family state:", error);
+    showStatus(familyLoadErrorMessage(error), {
+      error: true,
+      retry: route,
+    });
+    return;
+  }
+  if (version !== routeVersion) return;
+
+  if (!currentFamily) {
+    window.location.hash = "#/family";
+    return;
+  }
 
   if (hash === "#/add") {
     loadRecipeForm("add", null, version);
@@ -767,6 +1065,11 @@ function route() {
   if (passwordPrompt) completePasswordPrompt(null);
   const match = window.location.hash.match(/^#\/recipe\/([^/]+)\/?$/);
   if (!match) {
+    if (hash === "#/all") {
+      browseMode = "all";
+    } else {
+      browseMode = "home";
+    }
     loadRecipes();
     return;
   }

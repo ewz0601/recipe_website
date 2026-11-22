@@ -93,6 +93,73 @@ h3,
   padding-block: 18px;
 }
 
+.header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-wrap {
+  position: relative;
+}
+
+.menu-button {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--divider);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 1.15rem;
+}
+
+.menu-button:hover,
+.menu-button[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--button-text);
+}
+
+.family-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(59 42 30 / 14%);
+}
+
+.family-menu a,
+.family-menu button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+
+.family-menu a:hover,
+.family-menu button:hover {
+  border-radius: 5px;
+  background: var(--tag-background);
+  color: var(--accent-hover);
+}
+
 .brand-title {
   display: inline-block;
   color: var(--ink);
@@ -324,6 +391,92 @@ h3,
 
 .recipe-row-meta p {
   margin: 0;
+}
+
+.favorite-toggle {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--divider);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: "Lora", Georgia, serif;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.favorite-toggle:hover:not(:disabled),
+.favorite-toggle.is-saved {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--button-text);
+}
+
+.favorite-toggle:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.favorite-toggle-detail {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+  text-align: left;
+}
+
+.favorite-toggle-detail .favorite-toggle {
+  width: 44px;
+  height: 44px;
+}
+
+.favorite-detail {
+  margin-top: 14px;
+}
+
+.browse-title {
+  margin-bottom: 12px;
+  font-size: clamp(2rem, 8vw, 3.1rem);
+  line-height: 1.15;
+}
+
+.favorite-error {
+  margin: 8px 0 0;
+  color: var(--accent-hover);
+  font-size: 0.88rem;
+}
+
+.family-picker {
+  max-width: 620px;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.family-picker h1 {
+  margin-bottom: 8px;
+  font-size: clamp(2rem, 8vw, 3rem);
+}
+
+.family-picker-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.family-picker-button {
+  width: 100%;
+  min-height: 56px;
 }
 
 .status-message,

@@ -86,11 +86,48 @@
     return requireNoError(result);
   }
 
+  async function listFamilies() {
+    const result = await client
+      .from("families")
+      .select("id,name")
+      .order("name", { ascending: true });
+    return requireNoError(result);
+  }
+
+  async function getFavoriteRecipeIds(familyId) {
+    const result = await client
+      .from("favorites")
+      .select("recipe_id")
+      .eq("family_id", familyId);
+    const favorites = requireNoError(result);
+    return favorites.map((favorite) => favorite.recipe_id);
+  }
+
+  async function addFavorite(familyId, recipeId) {
+    const result = await client
+      .from("favorites")
+      .insert({ family_id: familyId, recipe_id: recipeId });
+    return requireNoError(result);
+  }
+
+  async function removeFavorite(familyId, recipeId) {
+    const result = await client
+      .from("favorites")
+      .delete()
+      .eq("family_id", familyId)
+      .eq("recipe_id", recipeId);
+    return requireNoError(result);
+  }
+
   window.recipeDb = Object.freeze({
     list: listRecipes,
     get: getRecipe,
     checkPassword: checkFamilyPassword,
     add: addRecipe,
     update: updateRecipe,
+    listFamilies,
+    getFavoriteRecipeIds,
+    addFavorite,
+    removeFavorite,
   });
 })();
