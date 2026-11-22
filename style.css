@@ -676,6 +676,26 @@ h3,
   gap: 16px;
 }
 
+.import-recipe-section {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px dashed var(--divider);
+  border-radius: 8px;
+  background: var(--notes);
+}
+
+.import-recipe-heading {
+  margin: 0;
+  font-family: "Lora", Georgia, serif;
+  font-size: 1.05rem;
+}
+
+.import-recipe-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .form-field {
   display: grid;
   min-width: 0;

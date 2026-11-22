@@ -60,3 +60,16 @@ set password_hash = extensions.crypt('NEW-LONG-FAMILY-PASSPHRASE', extensions.ge
 After a password change, each browser will ask for the new password the next time someone adds or edits a recipe. The website has no password reset feature.
 
 Export the `recipes` table to CSV from the Supabase Table Editor now and then as a backup. The website does not delete recipes; if one must be removed, an administrator can delete its row from the Table Editor.
+
+## Import recipes from a link
+
+On the Add a recipe form, a person can paste a recipe webpage link and choose **Retrieve recipe**. The website retrieves recipe title, ingredients, steps, servings, and prep time when the page publishes that information in Recipe JSON-LD. It fills the form for review; it does not save anything or choose tags automatically.
+
+Set a shared `FAMILY_PASSWORD` secret in Supabase Edge Functions. It should match the password used by the existing family-password flow. The importer requires the browser to send that password in `x-family-password`.
+
+To deploy the importer:
+
+1. In Supabase, open **Edge Functions → New function** and name it `import-recipe`.
+2. Open `supabase/functions/import-recipe/index.ts` in this repository, copy its contents, and paste them into the dashboard editor.
+3. In **Edge Function secrets**, add `FAMILY_PASSWORD` and deploy the function.
+4. Turn off **Verify JWT** for this function, because the browser uses the public Supabase publishable key and the shared family password instead.

@@ -189,3 +189,11 @@ Free Supabase projects are paused after about a week of low activity. Add `.gith
 ## Deployment
 
 Explain how to enable GitHub Pages (Settings, Pages, deploy from the `main` branch root) and how to test locally by opening `index.html` with a simple static server.
+
+## Pass 2e: Import a recipe from a link
+
+Add one Supabase Edge Function, `supabase/functions/import-recipe/index.ts`, that accepts a recipe URL and the existing family password. Fetch and parse Recipe JSON-LD safely, enforce the URL, redirect, size, timeout, and response-type safeguards in the pass specification, and return only the documented JSON recipe fields.
+
+Add an **Import from a link (optional)** section only to the Add a recipe form, above the normal recipe fields. Keep edit behavior unchanged. Reuse localStorage and the existing password dialog for the family password, post to `${SUPABASE_URL}/functions/v1/import-recipe` with the public key and `x-family-password`, and fill title, ingredients, instructions, servings, and prep time after confirmation if existing text would be overwritten. Never choose tags automatically. Show importer feedback in the form's existing success/error style and do not block manual entry.
+
+Document `FAMILY_PASSWORD`, dashboard paste deployment, and turning off Verify JWT in the README.

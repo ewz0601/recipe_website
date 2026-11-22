@@ -767,6 +767,64 @@ function isInvalidPasswordError(error) {
   );
 }
 
+async function retrieveImportedRecipe(url, feedback) {
+  const password = await getOrPromptForPassword();
+  if (!password) return null;
+
+  async function requestWithPassword(familyPassword) {
+    const config = window.RECIPE_CONFIG;
+    return fetch(`${config.supabaseUrl}/functions/v1/import-recipe`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${config.supabaseAnonKey}`,
+        "apikey": config.supabaseAnonKey,
+        "content-type": "application/json",
+        "x-family-password": familyPassword,
+      },
+      body: JSON.stringify({ url }),
+    });
+  }
+
+  try {
+    let response = await requestWithPassword(password);
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      showFormFeedback(feedback, "The recipe importer returned an unreadable response.");
+      return null;
+    }
+
+    if (data?.error === "bad_password") {
+      try {
+        localStorage.removeItem(PASSWORD_STORAGE_KEY);
+      } catch {
+        showFormFeedback(feedback, "This browser could not clear the saved password. Please check its storage settings.");
+        return null;
+      }
+      const renewedPassword = await promptForFamilyPassword();
+      if (!renewedPassword) return null;
+      response = await requestWithPassword(renewedPassword);
+      try {
+        data = await response.json();
+      } catch {
+        showFormFeedback(feedback, "The recipe importer returned an unreadable response.");
+        return null;
+      }
+    }
+
+    if (!response.ok || !data?.ok) {
+      showFormFeedback(feedback, data?.message || "We could not retrieve that recipe.");
+      return null;
+    }
+    return data.recipe;
+  } catch (error) {
+    console.error("Could not retrieve the recipe.", error?.code || "unknown");
+    showFormFeedback(feedback, "We could not retrieve that recipe. Please try again.");
+    return null;
+  }
+}
+
 async function writeWithPassword(write, feedback) {
   const password = await getOrPromptForPassword();
   if (!password) return false;
@@ -824,6 +882,71 @@ function renderRecipeForm(mode, recipe = null) {
   feedback.setAttribute("role", "alert");
 
   const form = makeElement("form", "recipe-form");
+  if (!editing) {
+    const importSection = makeElement("section", "import-recipe-section");
+    importSection.append(makeElement("h2", "import-recipe-heading", "Import from a link (optional)"));
+    const importField = addFormField(importSection, "Recipe URL", "import-url", {
+      type: "url",
+      placeholder: "https://",
+    });
+    importField.id = "recipe-import-url";
+    const importActions = makeElement("div", "import-recipe-actions");
+    const retrieve = makeElement("button", "button button-secondary", "Retrieve recipe");
+    retrieve.type = "button";
+    importActions.append(retrieve);
+    importSection.append(importActions);
+    const importFeedback = makeElement("p", "form-feedback");
+    importFeedback.hidden = true;
+    importSection.append(importFeedback);
+    form.append(importSection);
+
+    retrieve.addEventListener("click", async () => {
+      const url = importField.value.trim();
+      if (!url) {
+        showFormFeedback(importFeedback, "Enter a recipe link.");
+        importField.focus();
+        return;
+      }
+      retrieve.disabled = true;
+      retrieve.textContent = "Retrieving...";
+      showFormFeedback(importFeedback, "", false);
+      const imported = await retrieveImportedRecipe(url, importFeedback);
+      retrieve.disabled = false;
+      retrieve.textContent = "Retrieve recipe";
+      if (!imported) return;
+
+      const titleField = form.elements.namedItem("title");
+      const ingredientsField = form.elements.namedItem("ingredients");
+      const instructionsField = form.elements.namedItem("instructions");
+      const servingsField = form.elements.namedItem("servings");
+      const prepTimeField = form.elements.namedItem("prep_time");
+      const coreFields = [
+        titleField,
+        ingredientsField,
+        instructionsField,
+        servingsField,
+        prepTimeField,
+      ];
+      const hasExistingText = coreFields.some((field) => field.value.trim());
+
+      if (hasExistingText) {
+        const confirmed = window.confirm("Overwrite the existing recipe details with imported recipe data?");
+        if (!confirmed) return;
+      }
+
+      if (imported.title) titleField.value = imported.title;
+      if (Array.isArray(imported.ingredients) && imported.ingredients.length) {
+        ingredientsField.value = imported.ingredients.join("\n");
+      }
+      if (Array.isArray(imported.steps) && imported.steps.length) {
+        instructionsField.value = imported.steps.join("\n");
+      }
+      if (imported.servings) servingsField.value = imported.servings;
+      if (imported.prepTime) prepTimeField.value = imported.prepTime;
+      showFormFeedback(importFeedback, "Imported. Please check everything before saving.", false);
+    });
+  }
+
   addFormField(form, "Recipe title", "title", {
     maxLength: 120,
     required: true,
