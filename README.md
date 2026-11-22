@@ -8,6 +8,14 @@ Families can also keep a private-to-the-family list of favorite recipes on this 
 
 The site is plain HTML, CSS, and JavaScript. `index.html` loads the Supabase JavaScript client from a pinned CDN version, and `config.js` contains the project's URL and public browser key. The public key can read recipes. Adding and editing go through database functions that check the shared password; the password is saved in this browser after it is checked so it is only requested once per device.
 
+## Recipe tags
+
+Recipe tags are stored as stable text-array values on each row in `recipes.tags`. The complete tag vocabulary and display labels are defined in `tags.js`; edit that file instead of duplicating tag names in page code.
+
+Meal and Cuisine are required on add and edit forms. Cuisine is limited to one selection. The existing `tags text[]` column and GIN index in `supabase/schema.sql` support the tag system; no one-column-per-group migration is needed.
+
+Before migrating existing recipes, run the preview query in `supabase/tag_migration.sql`. It identifies recipes containing old `breakfast`, `dessert`, or `snack` values. The apply statement is additive and preserves every existing array value while also adding canonical lowercase keys. It does not infer Cuisine or any other tags. Existing recipes without a Meal or Cuisine still remain visible under All and continue to work normally.
+
 On first visit, the family picker asks which family is using the device. Its names come from the `families` table. Favorites are stored in the `favorites` table and can be added or removed without the recipe-editing password. Use the menu to switch families or open all extended family recipes.
 
 The `anon` database role needs table privileges in addition to the RLS policies. If the site reports a family-table permission error, run these statements in the Supabase SQL Editor (they grant table access but do not bypass RLS):

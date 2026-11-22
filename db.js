@@ -30,16 +30,11 @@
 
   async function listRecipes(options = {}) {
     const search = (options.search || "").trim();
-    const selectedTags = Array.isArray(options.tags) ? options.tags : [];
 
     let query = client
       .from("recipes")
       .select("*")
       .order("title", { ascending: true });
-
-    if (selectedTags.length > 0) {
-      query = query.contains("tags", selectedTags);
-    }
 
     if (search) {
       const safeSearch = escapeLikeValue(search);

@@ -1,0 +1,70 @@
+// Single source of truth for all recipe tags.
+window.TAG_CONFIG = Object.freeze([
+  Object.freeze({
+    key: "meal",
+    label: "Meal",
+    required: true,
+    multiple: true,
+    tags: Object.freeze([
+      ["breakfast", "Breakfast"],
+      ["lunch", "Lunch"],
+      ["dinner", "Dinner"],
+      ["appetizer", "Appetizer"],
+      ["side", "Side"],
+      ["snack", "Snack"],
+      ["dessert", "Dessert"],
+      ["drink", "Drink"],
+    ]),
+  }),
+  Object.freeze({
+    key: "cuisine",
+    label: "Cuisine",
+    required: true,
+    multiple: false,
+    tags: Object.freeze([
+      ["american", "American"],
+      ["italian", "Italian"],
+      ["mexican", "Mexican"],
+      ["asian", "Asian"],
+      ["mediterranean", "Mediterranean"],
+      ["indian", "Indian"],
+      ["other", "Other"],
+    ]),
+  }),
+  Object.freeze({
+    key: "occasion",
+    label: "Occasion",
+    required: false,
+    multiple: true,
+    tags: Object.freeze([
+      ["date-night", "Date night"],
+      ["hosting", "Hosting"],
+      ["weeknight", "Weeknight"],
+      ["holiday", "Holiday"],
+      ["potluck", "Potluck"],
+      ["meal-prep", "Meal prep"],
+    ]),
+  }),
+  Object.freeze({
+    key: "diet",
+    label: "Diet",
+    required: false,
+    multiple: true,
+    tags: Object.freeze([
+      ["healthy", "Healthy"],
+      ["gluten-free", "Gluten free"],
+    ]),
+  }),
+  Object.freeze({
+    key: "season",
+    label: "Season",
+    required: false,
+    multiple: true,
+    tags: Object.freeze([
+      ["spring", "Spring"],
+      ["summer", "Summer"],
+      ["fall", "Fall"],
+      ["winter", "Winter"],
+    ]),
+  }),
+]);

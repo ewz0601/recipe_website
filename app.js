@@ -1,9 +1,4 @@
-// Keep the tag vocabulary here so browse filters and recipe tags stay in sync.
-const TAG_GROUPS = [
-  { name: "Season", tags: ["spring", "summer", "fall", "winter", "year-round"] },
-  { name: "Meal", tags: ["breakfast", "lunch", "dinner", "snack", "dessert", "drink"] },
-  { name: "Diet", tags: ["healthy", "vegetarian", "vegan", "gluten-free", "quick"] },
-];
+const TAG_GROUPS = window.TAG_CONFIG;
 
 const PASSWORD_STORAGE_KEY = "familyRecipeBoxPassword";
 const FAMILY_STORAGE_KEY = "familyRecipeBoxFamily";
@@ -29,6 +24,9 @@ let currentFamily = null;
 let favoriteIds = new Set();
 let familyStatePromise = null;
 let browseMode = "home";
+let pendingInitialTag = null;
+let moreFiltersOpen = false;
+const openFilterGroups = new Set();
 
 const familyMenuButton = document.querySelector("#family-menu-button");
 const familyMenu = document.querySelector("#family-menu");
@@ -54,6 +52,10 @@ function makeElement(tag, className, text) {
 }
 
 function humanizeTag(tag) {
+  for (const group of TAG_GROUPS) {
+    const match = group.tags.find(([key]) => key === tag);
+    if (match) return match[1];
+  }
   return tag.replaceAll("-", " ");
 }
 
@@ -61,7 +63,11 @@ function appendTagPills(parent, tags, className = "tag-list") {
   const list = makeElement("ul", className);
   for (const tag of tags || []) {
     const item = makeElement("li");
-    item.append(makeElement("span", "tag-pill", humanizeTag(tag)));
+    const pill = makeElement("button", "tag-pill", humanizeTag(tag));
+    pill.type = "button";
+    pill.dataset.tag = tag;
+    pill.addEventListener("click", () => openTagFilter(tag));
+    item.append(pill);
     list.append(item);
   }
   parent.append(list);
@@ -121,7 +127,19 @@ function clearStoredFamily() {
   }
   currentFamily = null;
   favoriteIds = new Set();
+  selectedTags.clear();
+  searchText = "";
   updateMenu();
+}
+
+function openTagFilter(tag) {
+  selectedTags.clear();
+  selectedTags.add(tag);
+  pendingInitialTag = tag;
+  searchText = "";
+  browseMode = "all";
+  window.location.hash = "#/all";
+  if (window.location.hash === "#/all") loadRecipes();
 }
 
 function updateMenu() {
@@ -247,59 +265,160 @@ function createBrowseLayout(titleText) {
   });
   controls.append(search);
 
-  const groups = makeElement("div", "filter-groups");
-  for (const group of TAG_GROUPS) {
-    const section = makeElement("section", "filter-group");
-    const heading = makeElement("h2", "filter-heading", group.name);
-    section.append(heading);
+  const quick = makeElement("div", "quick-filter-row");
+  const allQuick = makeElement("button", "chip quick-chip", "All");
+  allQuick.type = "button";
+  allQuick.dataset.tag = "";
+  allQuick.addEventListener("click", () => clearSelectedTagsAndReload());
+  quick.append(allQuick);
+  for (const key of ["breakfast", "dinner", "dessert", "snack"]) {
+    const chip = makeElement("button", "chip quick-chip", humanizeTag(key));
+    chip.type = "button";
+    chip.dataset.tag = key;
+    chip.setAttribute("aria-pressed", String(selectedTags.has(key)));
+    chip.addEventListener("click", () => toggleTag(key));
+    quick.append(chip);
+  }
+  const more = makeElement("button", "button button-secondary more-filters", "");
+  more.type = "button";
+  more.addEventListener("click", () => {
+    moreFiltersOpen = !moreFiltersOpen;
+    renderBrowseFilterState();
+  });
+  quick.append(more);
+  controls.append(quick);
 
-    const chips = makeElement("div", "chip-list");
-    for (const tag of group.tags) {
-      const chip = makeElement("button", "chip", humanizeTag(tag));
+  const shell = makeElement("div", "browse-shell");
+  const panel = makeElement("aside", "filter-panel");
+  const panelHeading = makeElement("div", "filter-panel-heading");
+  panelHeading.append(makeElement("h2", "sidebar-title", "Filters"));
+  const active = makeElement("div", "active-filters");
+  active.setAttribute("aria-label", "Active filters");
+  panelHeading.append(active);
+  panel.append(panelHeading);
+  for (const group of TAG_GROUPS) {
+    const details = makeElement("section", "filter-disclosure");
+    const button = makeElement("button", "filter-disclosure-button");
+    button.type = "button";
+    button.dataset.group = group.key;
+    button.setAttribute("aria-expanded", String(openFilterGroups.has(group.key)));
+    const count = group.tags.filter(([tag]) => selectedTags.has(tag)).length;
+    button.textContent = count
+      ? `${group.label} (${count})`
+      : group.label;
+    button.addEventListener("click", () => {
+      if (openFilterGroups.has(group.key)) openFilterGroups.delete(group.key);
+      else openFilterGroups.add(group.key);
+      renderBrowseFilterState();
+    });
+    details.append(button);
+    const chips = makeElement("div", "chip-list filter-disclosure-chips");
+    chips.hidden = !openFilterGroups.has(group.key);
+    for (const [tag, label] of group.tags) {
+      const chip = makeElement("button", "chip", label);
       chip.type = "button";
       chip.dataset.tag = tag;
+      chip.dataset.group = group.key;
       chip.setAttribute("aria-pressed", String(selectedTags.has(tag)));
-      chip.addEventListener("click", () => {
-        if (selectedTags.has(tag)) {
-          selectedTags.delete(tag);
-        } else {
-          selectedTags.add(tag);
-        }
-        loadRecipes();
-      });
+      chip.addEventListener("click", () => toggleTag(tag));
       chips.append(chip);
     }
-
-    section.append(chips);
-    groups.append(section);
+    details.append(chips);
+    panel.append(details);
   }
-  controls.append(groups);
-
-  const actions = makeElement("div", "filter-actions");
-  const clear = makeElement("button", "text-button", "Clear filters");
+  const clear = makeElement("button", "text-button filter-clear", "Clear filters");
   clear.type = "button";
-  clear.addEventListener("click", () => {
-    selectedTags.clear();
-    searchText = "";
-    loadRecipes();
-  });
-  actions.append(clear);
-  controls.append(actions);
+  clear.addEventListener("click", clearSelectedTagsAndReload);
+  panel.append(clear);
+  shell.append(panel);
 
+  const results = makeElement("div", "recipe-results");
   const summary = makeElement("p", "results-summary");
   summary.setAttribute("aria-live", "polite");
   const list = makeElement("section", "recipe-list");
   list.setAttribute("aria-label", "Recipes");
-  const results = makeElement("div", "recipe-results");
   results.append(summary, list);
+  shell.append(results);
+  controls.append(shell);
 
   const children = [];
   const notice = takeFlash();
   if (notice) children.push(notice);
-  children.push(controls, results);
+  children.push(controls);
   app.replaceChildren(...children);
   browseView = { controls, summary, list };
+  renderBrowseFilterState();
   return browseView;
+}
+
+function toggleTag(tag) {
+  if (selectedTags.has(tag)) selectedTags.delete(tag);
+  else selectedTags.add(tag);
+  renderBrowseFilterState();
+  loadRecipes();
+}
+
+function clearSelectedTagsAndReload() {
+  selectedTags.clear();
+  searchText = "";
+  if (browseView?.controls) {
+    const search = browseView.controls.querySelector("#recipe-search");
+    if (search) search.value = "";
+  }
+  renderBrowseFilterState();
+  loadRecipes();
+}
+
+function renderBrowseFilterState() {
+  if (!browseView) return;
+  const { controls } = browseView;
+  const count = selectedTags.size;
+  const more = controls.querySelector(".more-filters");
+  if (more) {
+    more.textContent = `Filters (${count})`;
+    more.setAttribute("aria-expanded", String(moreFiltersOpen));
+  }
+  const panel = controls.querySelector(".filter-panel");
+  if (panel) panel.classList.toggle("is-open", moreFiltersOpen);
+  const active = controls.querySelector(".active-filters");
+  if (active) {
+    active.replaceChildren();
+    for (const tag of selectedTags) {
+      const chip = makeElement("button", "chip active-filter-chip", `${humanizeTag(tag)} ×`);
+      chip.type = "button";
+      chip.setAttribute("aria-label", `Remove ${humanizeTag(tag)} filter`);
+      chip.addEventListener("click", () => toggleTag(tag));
+      active.append(chip);
+    }
+  }
+  for (const chip of controls.querySelectorAll(".chip[data-tag]")) {
+    const tag = chip.dataset.tag;
+    chip.setAttribute("aria-pressed", String(tag && selectedTags.has(tag)));
+  }
+  for (const button of controls.querySelectorAll(".filter-disclosure-button")) {
+    const group = TAG_GROUPS.find((item) => item.key === button.dataset.group);
+    if (!group) continue;
+    const activeCount = group.tags.filter(([tag]) => selectedTags.has(tag)).length;
+    button.textContent = activeCount ? `${group.label} (${activeCount})` : group.label;
+    button.setAttribute("aria-expanded", String(openFilterGroups.has(group.key)));
+  }
+  for (const chips of controls.querySelectorAll(".filter-disclosure-chips")) {
+    const section = chips.closest(".filter-disclosure");
+    const groupKey = section.querySelector(".filter-disclosure-button").dataset.group;
+    chips.hidden = !openFilterGroups.has(groupKey);
+  }
+}
+
+function recipeMatchesSelectedTags(recipe) {
+  for (const group of TAG_GROUPS) {
+    const selectedInGroup = group.tags
+      .map(([tag]) => tag)
+      .filter((tag) => selectedTags.has(tag));
+    if (selectedInGroup.length === 0) continue;
+    const recipeTags = Array.isArray(recipe.tags) ? recipe.tags : [];
+    if (!selectedInGroup.some((tag) => recipeTags.includes(tag))) return false;
+  }
+  return true;
 }
 
 function favoriteLabel(recipeId) {
@@ -445,9 +564,9 @@ async function loadRecipes() {
   try {
     let recipes = await window.recipeDb.list({
       search: searchText,
-      tags: [...selectedTags],
     });
     if (currentRequest !== requestId) return;
+    recipes = recipes.filter(recipeMatchesSelectedTags);
     if (browseMode === "home") {
       recipes = recipes.filter((recipe) => favoriteIds.has(recipe.id));
     }
@@ -463,7 +582,13 @@ async function loadRecipes() {
         empty.append(allLink);
         list.append(empty);
       } else {
-        list.append(makeElement("p", "empty-message", "No recipes match those filters"));
+        const empty = makeElement("div", "empty-message");
+        empty.append(makeElement("p", "", "No recipes match those filters."));
+        const clear = makeElement("button", "button button-primary", "Clear filters");
+        clear.type = "button";
+        clear.addEventListener("click", clearSelectedTagsAndReload);
+        empty.append(clear);
+        list.append(empty);
       }
       return;
     }
@@ -731,24 +856,50 @@ function addRecipeTagFields(form, recipeTags = []) {
 
   for (const group of TAG_GROUPS) {
     const section = makeElement("div", "form-tag-group");
-    section.append(makeElement("p", "form-tag-heading", group.name));
+    const headingText = group.required ? `${group.label} (required)` : group.label;
+    section.append(makeElement("p", "form-tag-heading", headingText));
+    section.dataset.group = group.key;
     const options = makeElement("div", "form-tag-options");
-    for (const tag of group.tags) {
+    for (const [tag, label] of group.tags) {
       const wrapper = makeElement("label", "form-tag-chip");
       const input = makeElement("input");
-      input.type = "checkbox";
+      input.type = group.multiple ? "checkbox" : "radio";
       input.name = "tags";
       input.value = tag;
       input.checked = recipeTags.includes(tag);
-      const text = makeElement("span", "", humanizeTag(tag));
+      if (!group.multiple) input.name = `tag-${group.key}`;
+      const text = makeElement("span", "", label);
       wrapper.append(input, text);
       options.append(wrapper);
     }
+    const error = makeElement("p", "tag-required-error");
+    error.hidden = true;
+    error.setAttribute("role", "alert");
+    section.append(error);
     section.append(options);
+    if (group.required) {
+      options.addEventListener("change", () => {
+        const checked = [...options.querySelectorAll("input:checked")];
+        if (checked.length) {
+          error.textContent = "";
+          error.hidden = true;
+        }
+      });
+    }
     fieldset.append(section);
   }
 
   fieldset.prepend(legend);
+  for (const group of TAG_GROUPS.filter((item) => item.required)) {
+    const hasTag = group.tags.some(([tag]) => recipeTags.includes(tag));
+    if (hasTag) continue;
+    const section = fieldset.querySelector(`[data-group="${group.key}"]`);
+    const error = section?.querySelector(".tag-required-error");
+    if (error) {
+      error.textContent = `Choose ${group.label === "Cuisine" ? "one cuisine" : "at least one meal"} tag.`;
+      error.hidden = false;
+    }
+  }
   form.append(fieldset);
 }
 
@@ -1042,6 +1193,36 @@ function renderRecipeForm(mode, recipe = null) {
       return;
     }
 
+    const selectedFormTags = [
+      ...values.getAll("tags").map(String),
+      ...TAG_GROUPS.filter((group) => !group.multiple)
+        .map((group) => String(values.get(`tag-${group.key}`) || ""))
+        .filter(Boolean),
+    ];
+
+    let missingRequiredGroup = null;
+    for (const group of TAG_GROUPS.filter((item) => item.required)) {
+      const inGroup = group.tags.some(([tag]) => selectedFormTags.includes(tag));
+      const section = form.querySelector(`[data-group="${group.key}"]`);
+      const error = section?.querySelector(".tag-required-error");
+      if (!inGroup) {
+        if (error) {
+          error.textContent = `Choose at least one ${group.label.toLowerCase()} tag.`;
+          error.hidden = false;
+        }
+        if (!missingRequiredGroup) missingRequiredGroup = group;
+      } else if (error) {
+        error.textContent = "";
+        error.hidden = true;
+      }
+    }
+    if (missingRequiredGroup) {
+      const section = form.querySelector(`[data-group="${missingRequiredGroup.key}"]`);
+      section?.querySelector("input")?.focus();
+      showFormFeedback(feedback, `Choose ${missingRequiredGroup.label.toLowerCase()} tags before saving.`);
+      return;
+    }
+
     const sourceUrl = String(values.get("source_url") || "").trim();
     if (sourceUrl) {
       try {
@@ -1062,7 +1243,7 @@ function renderRecipeForm(mode, recipe = null) {
       ingredients: String(values.get("ingredients")).trim(),
       instructions: String(values.get("instructions")).trim(),
       notes: optionalValue("notes"),
-      tags: values.getAll("tags").map(String),
+      tags: selectedFormTags,
       prep_time: optionalValue("prep_time"),
       servings: optionalValue("servings"),
       source_url: sourceUrl || null,
@@ -1129,6 +1310,18 @@ async function route() {
   ++requestId;
   browseView = null;
   const hash = window.location.hash;
+
+  if (hash === "#/" || hash === "#/all") {
+    if (pendingInitialTag) {
+      selectedTags.clear();
+      selectedTags.add(pendingInitialTag);
+      pendingInitialTag = null;
+    } else {
+      selectedTags.clear();
+      searchText = "";
+    }
+    moreFiltersOpen = false;
+  }
 
   if (hash === "#/family") {
     try {
